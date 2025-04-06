@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import QrScanner from "qr-scanner";
 
 let scannedTickets = {};
@@ -7,29 +7,36 @@ let scannedTickets = {};
 export default function Page() {
   const [result, setResult] = useState(null);
   const [status, setStatus] = useState("");
-  const [scanner, setScanner] = useState(null);
-  const videoRef = React.useRef(null);
+  const videoRef = useRef(null);
+  const scannerRef = useRef(null);
 
   useEffect(() => {
-    if (videoRef.current && !scanner) {
-      const qrScanner = new QrScanner(
+    if (videoRef.current) {
+      scannerRef.current = new QrScanner(
         videoRef.current,
-        (result) => handleScan(result.data),
+        (scanResult) => {
+          handleScan(scanResult.data);
+        },
         {
           highlightScanRegion: true,
           returnDetailedScanResult: true,
         }
       );
-      qrScanner.start();
-      setScanner(qrScanner);
+
+      scannerRef.current.start().catch((err) => {
+        console.error("Camera error:", err);
+        setStatus("⚠️ Cannot access camera. Please allow permission.");
+      });
+
+      return () => scannerRef.current?.stop();
     }
-    return () => scanner && scanner.destroy();
-  }, [videoRef.current]);
+  }, []);
 
   const handleScan = (data) => {
     try {
       const ticket = JSON.parse(data);
       const ticketId = ticket.ticket_id;
+
       if (!scannedTickets[ticketId]) {
         scannedTickets[ticketId] = true;
         setResult(ticket);
@@ -39,7 +46,6 @@ export default function Page() {
         setStatus("❌ Ticket Already Used.");
       }
     } catch (e) {
-      setResult(null);
       setStatus("⚠️ Invalid QR Code");
     }
   };
@@ -60,7 +66,7 @@ export default function Page() {
             <p className="mt-2 font-bold">{status}</p>
           </div>
         ) : (
-          <p>No ticket scanned yet.</p>
+          <p>{status || "No ticket scanned yet."}</p>
         )}
       </div>
     </div>
